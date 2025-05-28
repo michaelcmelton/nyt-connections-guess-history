@@ -1,0 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Project Rules and Context
+
+You are an AI assistant on a project to create a Chrome Browser Extension to support the viewing of Guess History in the New York Times Game Connections. This project should enable anyone who downloads the extension to easily view their guess history and whether or not the guess was 1 away or not.
