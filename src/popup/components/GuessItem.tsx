@@ -3,24 +3,28 @@ import { Guess } from '../../shared/types';
 
 interface GuessItemProps {
   guess: Guess;
+  choices: string[];
 }
 
-const GuessItem: React.FC<GuessItemProps> = ({ guess }) => {
+const GuessItem: React.FC<GuessItemProps> = ({ guess, choices }) => {
+  const guessWords = guess.cards.map(card => choices[card.position]);
+  const isOneAway = !guess.correct && guess.cards.filter((card, idx) => 
+    guess.cards.slice(0, idx).concat(guess.cards.slice(idx + 1))
+      .some(otherCard => otherCard.level === card.level)
+  ).length >= 3;
+
   return (
-    <div className={`guess-item ${guess.isOneAway ? 'one-away' : ''}`}>
+    <div className={`guess-item ${isOneAway ? 'one-away' : ''}`}>
       <div className="guess-words">
-        {guess.words.map((word, index) => (
+        {guessWords.map((word, index) => (
           <span key={index} className="word">
             {word}
           </span>
         ))}
       </div>
-      {guess.isOneAway && (
+      {isOneAway && (
         <div className="one-away-badge">1 away</div>
       )}
-      <div className="timestamp">
-        {new Date(guess.timestamp).toLocaleTimeString()}
-      </div>
     </div>
   );
 };
