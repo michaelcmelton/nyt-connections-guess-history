@@ -10,7 +10,7 @@ interface PopupState {
 }
 
 const Popup: React.FC = () => {
-  const [state, setState] = useState<PopupState>({ 
+  const [state, setState] = useState<PopupState>({
     gameState: null,
     choices: []
   });
@@ -18,31 +18,67 @@ const Popup: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Request current game state from background script
-    chrome.runtime.sendMessage({ type: 'GET_GAME_STATE' }, (response: PopupState | null) => {
-      if (chrome.runtime.lastError) {
-        console.error('Error fetching game state:', chrome.runtime.lastError);
-        setError('Failed to load guess history');
-        setLoading(false);
-        return;
-      }
-      console.log('Received game state:', response);
-      if (response) {
-        setState(response);
-      }
-      setLoading(false);
-    });
+    let mounted = true;
 
-    // Listen for updates from background script
-    const listener = (message: { type: string; payload: PopupState }) => {
-      if (message.type === 'GAME_STATE_UPDATED') {
+    const init = async () => {
+      try {
+        // First get the choices - we only need these once
+        const choicesResponse = await chrome.runtime.sendMessage({ type: 'REQUEST_CHOICES' });
+        if (!mounted) return;
+
+        
+        if (chrome.runtime.lastError) {
+          console.error('Error fetching choices:', chrome.runtime.lastError);
+          setError('Failed to load choices');
+          setLoading(false);
+          return;
+        }
+        
+        if (choicesResponse?.choices) {
+          setState(prev => ({ ...prev, choices: choicesResponse.choices }));
+        }
+
+        // Then get the game state
+        const gameStateResponse = await chrome.runtime.sendMessage({ type: 'REQUEST_CURRENT_GAME_STATE' });
+        if (!mounted) return;
+
+        if (chrome.runtime.lastError) {
+          console.error('Error fetching game state:', chrome.runtime.lastError);
+          setError('Failed to load guess history');
+          setLoading(false);
+          return;
+        }
+
+        if (gameStateResponse?.state) {
+          setState(prev => ({ ...prev, gameState: gameStateResponse.state }));
+        }
+      } catch (error) {
+        if (!mounted) return;
+        console.error('Error initializing popup:', error);
+        setError('Failed to initialize');
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    init();
+
+    // Listen for updates from background script - only for game state updates
+    const listener = (message: { type: string; payload: { state: PuzzleState } }) => {
+      if (message.type === 'GAME_STATE_UPDATED' && mounted) {
         console.log('Received state update:', message.payload);
-        setState(message.payload);
+        setState(prev => ({ ...prev, gameState: message.payload.state }));
       }
     };
 
     chrome.runtime.onMessage.addListener(listener);
-    return () => chrome.runtime.onMessage.removeListener(listener);
+    
+    return () => {
+      mounted = false;
+      chrome.runtime.onMessage.removeListener(listener);
+    };
   }, []);
 
   return (
@@ -54,7 +90,12 @@ const Popup: React.FC = () => {
         <div className="error">{error}</div>
       ) : !state.gameState ? (
         <div className="no-guesses">No active game found</div>
-      ) : state.gameState.data.guesses.length === 0 ? (
+      ) : state.gameState.puzzleComplete && !state.gameState.puzzleWon ? (
+        <div className="no-guesses">Sorry for the loss! Come back tomorrow to play again!</div>
+      ) : state.gameState.puzzleComplete && state.gameState.puzzleWon ? (
+        <div className="no-guesses">Congratulations! You won! Come back tomorrow to play again!</div>
+      ) :
+      state.gameState.data.guesses.length === 0 ? (
         <div className="no-guesses">No guesses recorded yet</div>
       ) : (
         <div className="guess-history">

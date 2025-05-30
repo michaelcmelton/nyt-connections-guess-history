@@ -26,6 +26,8 @@ export interface PuzzleData {
 export interface PuzzleState {
   puzzleId: string;
   data: PuzzleData;
+  puzzleWon: boolean;
+  puzzleComplete: boolean;
   schemaVersion: string;
   timestamp: number;
   printDate: string;

@@ -8,30 +8,18 @@
 
 import { PuzzleState } from '../shared/types';
 
-interface UpdateGameStateMessage {
-  type: 'UPDATE_GAME_STATE';
-  payload: {
-    state: PuzzleState;
-    choices: string[];
-  };
+interface RequestGameStateMessage {
+  type: 'REQUEST_CURRENT_GAME_STATE';
 }
 
-interface GetGameStateMessage {
-  type: 'GET_GAME_STATE';
+interface RequestChoicesMessage {
+  type: 'REQUEST_CHOICES';
 }
 
-interface RequestCurrentStateMessage {
-  type: 'REQUEST_CURRENT_STATE';
-}
-
-type Message = UpdateGameStateMessage | GetGameStateMessage | RequestCurrentStateMessage;
-
-// Keep latest state in memory
-let currentState: PuzzleState | null = null;
-let currentChoices: string[] = [];
+type Message = RequestGameStateMessage | RequestChoicesMessage;
 
 // Query content script for current state
-async function getCurrentState(): Promise<{ gameState: PuzzleState | null; choices: string[] }> {
+async function getCurrentState(): Promise<{ state: PuzzleState | null }> {
   try {
     // Get active tab
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -39,34 +27,59 @@ async function getCurrentState(): Promise<{ gameState: PuzzleState | null; choic
     
     if (!activeTab?.id || !activeTab.url) {
       console.log('No active tab found');
-      return { gameState: currentState, choices: currentChoices };
+      return { state: null };
     }
 
     // Check if we're on the Connections game page
     if (!activeTab.url.includes('nytimes.com/games/connections')) {
       console.log('Not on Connections game page:', activeTab.url);
-      return { gameState: null, choices: [] };
+      return { state: null };
     }
 
     try {
       // Request current state from content script
-      const response = await chrome.tabs.sendMessage(activeTab.id, { type: 'REQUEST_CURRENT_STATE' });
-      if (response) {
-        currentState = response.state;
-        currentChoices = response.choices;
-        return { gameState: currentState, choices: currentChoices };
-      }
+      const response = await chrome.tabs.sendMessage(activeTab.id, { type: 'REQUEST_CURRENT_GAME_STATE' });
+      return { state: response?.state || null };
     } catch (error) {
       console.log('Error communicating with content script:', error);
-      // If we can't communicate with the content script but we're on the right page,
-      // return the last known state
-      return { gameState: currentState, choices: currentChoices };
+      return { state: null };
     }
   } catch (error) {
     console.log('Error in getCurrentState:', error);
+    return { state: null };
   }
-  
-  return { gameState: currentState, choices: currentChoices };
+}
+
+// Query content script for choices
+async function getChoices(): Promise<{ choices: string[] }> {
+  try {
+    // Get active tab
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const activeTab = tabs[0];
+    
+    if (!activeTab?.id || !activeTab.url) {
+      console.log('No active tab found');
+      return { choices: [] };
+    }
+
+    // Check if we're on the Connections game page
+    if (!activeTab.url.includes('nytimes.com/games/connections')) {
+      console.log('Not on Connections game page:', activeTab.url);
+      return { choices: [] };
+    }
+
+    try {
+      // Request choices from content script
+      const response = await chrome.tabs.sendMessage(activeTab.id, { type: 'REQUEST_CHOICES' });
+      return { choices: response?.choices || [] };
+    } catch (error) {
+      console.log('Error communicating with content script:', error);
+      return { choices: [] };
+    }
+  } catch (error) {
+    console.log('Error in getChoices:', error);
+    return { choices: [] };
+  }
 }
 
 // Handle messages from content script and popup
@@ -74,34 +87,17 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
   console.log('Received message:', message);
   
   switch (message.type) {
-    case 'UPDATE_GAME_STATE':
-      console.log('Updating game state with:', {
-        guessCount: message.payload.state?.data?.guesses?.length || 0,
-        payload: message.payload
+    case 'REQUEST_CURRENT_GAME_STATE':
+      getCurrentState().then(response => {
+        console.log('Sending state to popup:', response);
+        sendResponse(response);
       });
+      return true; // Required for async response
       
-      // Update our in-memory state
-      currentState = message.payload.state;
-      currentChoices = message.payload.choices;
-
-      // Notify any open popups about the change
-      chrome.runtime.sendMessage({
-        type: 'GAME_STATE_UPDATED',
-        payload: {
-          gameState: currentState,
-          choices: currentChoices
-        }
-      });
-      break;
-      
-    case 'GET_GAME_STATE':
-      console.log('Getting current state from content script');
-      getCurrentState().then(state => {
-        console.log('Sending state to popup:', {
-          guessCount: state.gameState?.data?.guesses?.length || 0,
-          state
-        });
-        sendResponse(state);
+    case 'REQUEST_CHOICES':
+      getChoices().then(response => {
+        console.log('Sending choices to popup:', response);
+        sendResponse(response);
       });
       return true; // Required for async response
   }
