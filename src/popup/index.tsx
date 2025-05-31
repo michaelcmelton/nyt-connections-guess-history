@@ -16,9 +16,14 @@ const Popup: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [extensionVersion, setExtensionVersion] = useState<string>('');
 
   useEffect(() => {
     let mounted = true;
+
+    // Get extension version
+    const manifest = chrome.runtime.getManifest();
+    setExtensionVersion(manifest.version);
 
     const init = async () => {
       try {
@@ -26,7 +31,6 @@ const Popup: React.FC = () => {
         const choicesResponse = await chrome.runtime.sendMessage({ type: 'REQUEST_CHOICES' });
         if (!mounted) return;
 
-        
         if (chrome.runtime.lastError) {
           console.error('Error fetching choices:', chrome.runtime.lastError);
           setError('Failed to load choices');
@@ -44,7 +48,7 @@ const Popup: React.FC = () => {
 
         if (chrome.runtime.lastError) {
           console.error('Error fetching game state:', chrome.runtime.lastError);
-          setError('Failed to load guess history');
+          setError('Failed to load game state');
           setLoading(false);
           return;
         }
@@ -83,7 +87,10 @@ const Popup: React.FC = () => {
 
   return (
     <div className="popup-container">
-      <h1>Connections Guess History</h1>
+      <div className="header">
+        <h1>Connections Guess History</h1>
+        <span className="version">v{extensionVersion}</span>
+      </div>
       {loading ? (
         <div className="loading">Loading...</div>
       ) : error ? (
@@ -94,8 +101,7 @@ const Popup: React.FC = () => {
         <div className="no-guesses">Sorry for the loss! Come back tomorrow to play again!</div>
       ) : state.gameState.puzzleComplete && state.gameState.puzzleWon ? (
         <div className="no-guesses">Congratulations! You won! Come back tomorrow to play again!</div>
-      ) :
-      state.gameState.data.guesses.length === 0 ? (
+      ) : state.gameState.data.guesses.length === 0 ? (
         <div className="no-guesses">No guesses recorded yet</div>
       ) : (
         <div className="guess-history">
