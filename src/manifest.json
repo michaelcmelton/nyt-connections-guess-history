@@ -3,18 +3,27 @@
   "name": "Connections Guess History",
   "version": "0.0.1",
   "description": "View your guess history in NYT Connections",
-  "permissions": ["storage", "activeTab"],
-  "host_permissions": ["https://www.nytimes.com/games/connections*"],
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "https://www.nytimes.com/games/connections*",
+    "http://www.nytimes.com/games/connections*"
+  ],
   "action": {
     "default_popup": "popup.html"
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "content_scripts": [
     {
-      "matches": ["https://www.nytimes.com/games/connections*"],
-      "js": ["content.js"]
+      "matches": [
+        "https://www.nytimes.com/games/connections*",
+        "http://www.nytimes.com/games/connections*",
+        "*://www.nytimes.com/games/connections*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_start"
     }
   ]
 } 

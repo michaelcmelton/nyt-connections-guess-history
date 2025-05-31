@@ -97,9 +97,9 @@ const Popup: React.FC = () => {
         <div className="error">{error}</div>
       ) : !state.gameState ? (
         <div className="no-guesses">No active game found</div>
-      ) : state.gameState.puzzleComplete && !state.gameState.puzzleWon ? (
+      ) : state.gameState.data.puzzleComplete && !state.gameState.data.puzzleWon ? (
         <div className="no-guesses">Sorry for the loss! Come back tomorrow to play again!</div>
-      ) : state.gameState.puzzleComplete && state.gameState.puzzleWon ? (
+      ) : state.gameState.data.puzzleComplete && state.gameState.data.puzzleWon ? (
         <div className="no-guesses">Congratulations! You won! Come back tomorrow to play again!</div>
       ) : state.gameState.data.guesses.length === 0 ? (
         <div className="no-guesses">No guesses recorded yet</div>
