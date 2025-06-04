@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Connections Guess History",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "View your guess history in NYT Connections",
-  "permissions": ["storage", "activeTab", "scripting"],
+  "permissions": ["activeTab"],
   "host_permissions": [
     "https://www.nytimes.com/games/connections*",
     "http://www.nytimes.com/games/connections*"
