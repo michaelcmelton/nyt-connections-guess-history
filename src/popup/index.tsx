@@ -18,50 +18,82 @@ const Popup: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [extensionVersion, setExtensionVersion] = useState<string>('');
 
+  // Debug logging for state changes
+  useEffect(() => {
+    console.log('[DEBUG] Popup state updated:', {
+      hasGameState: !!state.gameState,
+      guessCount: state.gameState?.data?.guesses?.length || 0,
+      choicesCount: state.choices.length,
+      loading,
+      error
+    });
+  }, [state, loading, error]);
+
   useEffect(() => {
     let mounted = true;
+    console.log('[DEBUG] Popup component mounted');
 
     // Get extension version
     const manifest = chrome.runtime.getManifest();
     setExtensionVersion(manifest.version);
+    console.log('[DEBUG] Extension version:', manifest.version);
 
     const init = async () => {
       try {
+        console.log('[DEBUG] Initializing popup - requesting choices');
         // First get the choices - we only need these once
         const choicesResponse = await chrome.runtime.sendMessage({ type: 'REQUEST_CHOICES' });
-        if (!mounted) return;
+        if (!mounted) {
+          console.log('[DEBUG] Component unmounted during choices request');
+          return;
+        }
 
         if (chrome.runtime.lastError) {
-          console.error('Error fetching choices:', chrome.runtime.lastError);
+          console.error('[DEBUG] Error fetching choices:', chrome.runtime.lastError);
           setError('Failed to load choices');
           setLoading(false);
           return;
         }
         
+        console.log('[DEBUG] Received choices response:', {
+          hasChoices: !!choicesResponse?.choices,
+          choicesCount: choicesResponse?.choices?.length || 0
+        });
+        
         if (choicesResponse?.choices) {
           setState(prev => ({ ...prev, choices: choicesResponse.choices }));
         }
 
+        console.log('[DEBUG] Requesting game state');
         // Then get the game state
         const gameStateResponse = await chrome.runtime.sendMessage({ type: 'REQUEST_CURRENT_GAME_STATE' });
-        if (!mounted) return;
+        if (!mounted) {
+          console.log('[DEBUG] Component unmounted during game state request');
+          return;
+        }
 
         if (chrome.runtime.lastError) {
-          console.error('Error fetching game state:', chrome.runtime.lastError);
+          console.error('[DEBUG] Error fetching game state:', chrome.runtime.lastError);
           setError('Failed to load game state');
           setLoading(false);
           return;
         }
+
+        console.log('[DEBUG] Received game state response:', {
+          hasState: !!gameStateResponse?.state,
+          guessCount: gameStateResponse?.state?.data?.guesses?.length || 0
+        });
 
         if (gameStateResponse?.state) {
           setState(prev => ({ ...prev, gameState: gameStateResponse.state }));
         }
       } catch (error) {
         if (!mounted) return;
-        console.error('Error initializing popup:', error);
+        console.error('[DEBUG] Error initializing popup:', error);
         setError('Failed to initialize');
       } finally {
         if (mounted) {
+          console.log('[DEBUG] Initialization complete, setting loading to false');
           setLoading(false);
         }
       }
@@ -72,14 +104,20 @@ const Popup: React.FC = () => {
     // Listen for updates from background script - only for game state updates
     const listener = (message: { type: string; payload: { state: PuzzleState } }) => {
       if (message.type === 'GAME_STATE_UPDATED' && mounted) {
-        console.log('Received state update:', message.payload);
+        console.log('[DEBUG] Received state update from background:', {
+          guessCount: message.payload.state.data.guesses.length,
+          isComplete: message.payload.state.data.puzzleComplete,
+          isWon: message.payload.state.data.puzzleWon
+        });
         setState(prev => ({ ...prev, gameState: message.payload.state }));
       }
     };
 
+    console.log('[DEBUG] Setting up message listener');
     chrome.runtime.onMessage.addListener(listener);
     
     return () => {
+      console.log('[DEBUG] Popup component unmounting');
       mounted = false;
       chrome.runtime.onMessage.removeListener(listener);
     };

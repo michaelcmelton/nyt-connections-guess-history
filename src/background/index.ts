@@ -36,6 +36,17 @@ let initialChoices: string[] = [];
 let contentScriptReady = false;
 let lastContentScriptUrl: string | null = null;
 
+// Debug logging for state changes
+function logStateChange(action: string, data?: any) {
+  console.log('[DEBUG] Background state change:', {
+    action,
+    contentScriptReady,
+    lastContentScriptUrl,
+    initialChoicesCount: initialChoices.length,
+    ...data
+  });
+}
+
 // Function to inject content script
 async function injectContentScript(tabId: number): Promise<void> {
   try {
@@ -81,6 +92,8 @@ async function ensureContentScript(): Promise<boolean> {
             chrome.runtime.onMessage.removeListener(listener);
             console.log('[DEBUG] Content script initialized successfully');
             contentScriptReady = true;
+            lastContentScriptUrl = message.url;
+            logStateChange('content-script-ready', { url: message.url });
             resolve(true);
           }
         });
@@ -109,14 +122,17 @@ async function getCurrentState(): Promise<{ state: PuzzleState | null }> {
     try {
       console.log('[DEBUG] Requesting current state from content script');
       const response = await chrome.tabs.sendMessage(tab.id, { type: 'REQUEST_CURRENT_GAME_STATE' });
-      console.log('[DEBUG] Received response from content script:', response);
+      console.log('[DEBUG] Received response from content script:', {
+        hasState: !!response?.state,
+        guessCount: response?.state?.data?.guesses?.length || 0
+      });
       
       if (response?.state && response.state.data.guesses.length === 0) {
         console.log('[DEBUG] New game detected, requesting fresh choices');
         const choicesResponse = await chrome.tabs.sendMessage(tab.id, { type: 'REQUEST_CHOICES' });
         if (choicesResponse?.choices) {
           initialChoices = choicesResponse.choices;
-          console.log('[DEBUG] Updated initial choices for new game:', initialChoices);
+          logStateChange('new-game-choices', { choicesCount: initialChoices.length });
         }
       }
       
@@ -134,7 +150,9 @@ async function getCurrentState(): Promise<{ state: PuzzleState | null }> {
 // Get choices - returns initial choices if we have them
 async function getChoices(): Promise<{ choices: string[] }> {
   if (initialChoices.length > 0) {
-    console.log('[DEBUG] Returning cached initial choices:', initialChoices);
+    console.log('[DEBUG] Returning cached initial choices:', {
+      count: initialChoices.length
+    });
     return { choices: initialChoices };
   }
 
@@ -153,11 +171,14 @@ async function getChoices(): Promise<{ choices: string[] }> {
     try {
       console.log('[DEBUG] Requesting choices from content script');
       const response = await chrome.tabs.sendMessage(tab.id, { type: 'REQUEST_CHOICES' });
-      console.log('[DEBUG] Received choices response:', response);
+      console.log('[DEBUG] Received choices response:', {
+        hasChoices: !!response?.choices,
+        choicesCount: response?.choices?.length || 0
+      });
       
       if (response?.choices) {
         initialChoices = response.choices;
-        console.log('[DEBUG] Cached initial choices:', initialChoices);
+        logStateChange('cached-choices', { choicesCount: initialChoices.length });
       }
       return { choices: initialChoices };
     } catch (error) {
@@ -176,29 +197,40 @@ function resetChoices() {
   initialChoices = [];
   contentScriptReady = false;
   lastContentScriptUrl = null;
+  logStateChange('reset');
 }
 
 // Handle messages from content script and popup
 chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
-  console.log('[DEBUG] Received message:', message.type, 'from:', sender.tab?.url);
+  console.log('[DEBUG] Received message:', {
+    type: message.type,
+    from: sender.tab?.url,
+    senderId: sender.id
+  });
   
   switch (message.type) {
     case 'CONTENT_SCRIPT_READY':
       console.log('[DEBUG] Content script ready on:', message.url);
       contentScriptReady = true;
       lastContentScriptUrl = message.url;
+      logStateChange('content-script-ready', { url: message.url });
       break;
       
     case 'REQUEST_CURRENT_GAME_STATE':
       getCurrentState().then(response => {
-        console.log('[DEBUG] Sending state to popup:', response);
+        console.log('[DEBUG] Sending state to popup:', {
+          hasState: !!response?.state,
+          guessCount: response?.state?.data?.guesses?.length || 0
+        });
         sendResponse(response);
       });
       return true;
       
     case 'REQUEST_CHOICES':
       getChoices().then(response => {
-        console.log('[DEBUG] Sending choices to popup:', response);
+        console.log('[DEBUG] Sending choices to popup:', {
+          choicesCount: response.choices.length
+        });
         sendResponse(response);
       });
       return true;
@@ -214,7 +246,13 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 
 // Reset choices when extension starts up
-chrome.runtime.onStartup.addListener(resetChoices);
+chrome.runtime.onStartup.addListener(() => {
+  console.log('[DEBUG] Extension starting up');
+  resetChoices();
+});
 
 // Reset choices when installed/updated
-chrome.runtime.onInstalled.addListener(resetChoices);
+chrome.runtime.onInstalled.addListener(() => {
+  console.log('[DEBUG] Extension installed/updated');
+  resetChoices();
+});

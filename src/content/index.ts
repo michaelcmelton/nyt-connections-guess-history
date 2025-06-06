@@ -2,7 +2,7 @@
 /** Content script for the extension 
  * 
  * This script is responsible for:
- * - Finding applicable game state in local storage denoted by partial key matches to games-state-connections.
+ * - Finding applicable game state in local storage denoted by partial key matches to game-state-connections.
  * - Sending the game state when requested.
 */
 
@@ -10,7 +10,14 @@ import { PuzzleState, isValidGameState } from '../shared/types';
 
 console.log('[DEBUG] Content script starting initialization');
 
-const STORAGE_KEY_PATTERN = 'games-state-connections';
+// Debug logging for state changes
+function logStateChange(action: string, data?: any) {
+  console.log('[DEBUG] Content script state change:', {
+    action,
+    url: window.location.href,
+    ...data
+  });
+}
 
 // Ensure we're on the right page
 if (!window.location.href.includes('nytimes.com/games/connections')) {
@@ -18,65 +25,109 @@ if (!window.location.href.includes('nytimes.com/games/connections')) {
   throw new Error('Not on Connections page');
 }
 
+// Function to find game state in localStorage
 function findGameState(): PuzzleState | null {
-  // Find all keys in localStorage that match our pattern
-  const matchingKeys = Object.keys(localStorage).filter(key => key.includes(STORAGE_KEY_PATTERN));
+  const keys = Object.keys(localStorage);
+  const gameStateKey = keys.find(key => key.includes('game-state-connections'));
   
-  if (matchingKeys.length === 0) {
-    console.log('[DEBUG] No matching keys found in localStorage');
+  if (!gameStateKey) {
+    console.log('[DEBUG] No game state found in localStorage');
     return null;
   }
 
   try {
-    let gameState = null;
-    
-    // First try to find a non-anonymous game state
-    for (const key of matchingKeys) {
-      if (!key.includes('ANON')) {
-        const rawData = localStorage.getItem(key);
-        if (!rawData) continue;
-        
-        const parsedData = JSON.parse(rawData);
-        console.log('[DEBUG] Parsed non-anonymous game state:', parsedData);
-        
-        if (isValidGameState(parsedData)) {
-          gameState = parsedData.states[0];
-          break;
-        }
-      }
+    const state = JSON.parse(localStorage.getItem(gameStateKey) || '');
+    if (isValidGameState(state)) {
+      logStateChange('found-game-state', {
+        key: gameStateKey,
+        guessCount: state.states[0].data.guesses.length,
+        isComplete: state.states[0].puzzleComplete,
+        isWon: state.states[0].puzzleWon
+      });
+      return state.states[0];
     }
-
-    // If no non-anonymous state found, try anonymous
-    if (!gameState && matchingKeys.length > 0) {
-      const rawData = localStorage.getItem(matchingKeys[0]);
-      if (rawData) {
-        const parsedData = JSON.parse(rawData);
-        console.log('[DEBUG] Parsed anonymous game state:', parsedData);
-        
-        if (isValidGameState(parsedData)) {
-          gameState = parsedData.states[0];
-        }
-      }
-    }
-
-    console.log('[DEBUG] Final game state:', gameState);
-    return gameState;
+    console.log('[DEBUG] Invalid game state found:', state);
+    return null;
   } catch (error) {
     console.error('[DEBUG] Error parsing game state:', error);
     return null;
   }
 }
 
+// Function to scrape choices from the DOM
 function scrapeChoices(): string[] {
-  const choices = document.querySelectorAll('[data-flip-id]');
-  if (choices.length === 0) {
-    console.log('[DEBUG] No choices found in DOM');
-    return [];
-  }
+  const choices: string[] = [];
+  const cards = document.querySelectorAll('[class*="card"]');
+  
+  console.log('[DEBUG] Scraping choices from DOM:', {
+    cardCount: cards.length
+  });
 
-  const choiceArray = Array.from(choices).map(choice => (choice as HTMLElement).dataset.flipId || '');
-  console.log('[DEBUG] Scraped choices:', choiceArray);
-  return choiceArray;
+  cards.forEach(card => {
+    const text = card.textContent?.trim();
+    if (text) {
+      choices.push(text);
+    }
+  });
+
+  logStateChange('scraped-choices', {
+    choicesCount: choices.length
+  });
+
+  return choices;
+}
+
+// Function to notify background script of state changes
+function notifyStateChange() {
+  const gameState = findGameState();
+  if (gameState) {
+    logStateChange('notifying-state-change', {
+      guessCount: gameState.data.guesses.length,
+      isComplete: gameState.data.puzzleComplete,
+      isWon: gameState.data.puzzleWon
+    });
+    chrome.runtime.sendMessage({ 
+      type: 'GAME_STATE_UPDATED',
+      payload: { state: gameState }
+    }).catch(error => {
+      console.log('[DEBUG] Failed to send state update:', error);
+    });
+  }
+}
+
+// Set up storage event listener
+window.addEventListener('storage', (event) => {
+  if (event.key?.includes('game-state-connections')) {
+    console.log('[DEBUG] Storage event detected:', {
+      key: event.key,
+      newValue: event.newValue ? 'present' : 'null',
+      oldValue: event.oldValue ? 'present' : 'null'
+    });
+    notifyStateChange();
+  }
+});
+
+// Also observe DOM changes as a fallback
+const observer = new MutationObserver((mutations) => {
+  console.log('[DEBUG] DOM mutation detected:', {
+    mutationCount: mutations.length,
+    target: mutations[0]?.target instanceof Element ? mutations[0].target.className : 'unknown'
+  });
+  notifyStateChange();
+});
+
+// Start observing the game container
+const gameContainer = document.querySelector('[class*="cardsContainer"]');
+if (gameContainer) {
+  console.log('[DEBUG] Found game container, setting up observer');
+  observer.observe(gameContainer, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class']
+  });
+} else {
+  console.log('[DEBUG] Game container not found');
 }
 
 // Remove any existing listeners to prevent duplicates
@@ -87,7 +138,10 @@ if (chrome.runtime.onMessage.hasListeners()) {
 
 // Set up message listener
 const messageListener = (message: any, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
-  console.log('[DEBUG] Content script received message:', message);
+  console.log('[DEBUG] Content script received message:', {
+    type: message.type,
+    senderId: sender.id
+  });
 
   switch (message.type) {
     case 'PING':
@@ -98,9 +152,9 @@ const messageListener = (message: any, sender: chrome.runtime.MessageSender, sen
     case 'REQUEST_CURRENT_GAME_STATE':
       console.log('[DEBUG] Processing game state request');
       const gameState = findGameState();
-      console.log('[DEBUG] Found current game state:', {
-        guessCount: gameState?.data?.guesses?.length || 0,
-        state: gameState
+      logStateChange('sending-game-state', {
+        hasState: !!gameState,
+        guessCount: gameState?.data?.guesses?.length || 0
       });
       sendResponse({ state: gameState });
       return true;
@@ -108,7 +162,9 @@ const messageListener = (message: any, sender: chrome.runtime.MessageSender, sen
     case 'REQUEST_CHOICES':
       console.log('[DEBUG] Processing choices request');
       const choices = scrapeChoices();
-      console.log('[DEBUG] Sending choices response:', choices);
+      logStateChange('sending-choices', {
+        choicesCount: choices.length
+      });
       sendResponse({ choices: choices });
       return true;
 
@@ -132,11 +188,7 @@ function notifyReady() {
   });
 }
 
-// Wait for DOM to be ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', notifyReady);
-} else {
-  notifyReady();
-}
+// Notify that we're ready
+notifyReady();
 
 console.log('[DEBUG] Content script initialization complete');

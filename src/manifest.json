@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Connections Guess History",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "View your guess history in NYT Connections",
   "permissions": ["activeTab"],
   "host_permissions": [
