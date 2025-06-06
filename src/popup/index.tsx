@@ -9,7 +9,7 @@ interface PopupState {
   choices: string[];
 }
 
-const Popup: React.FC = () => {
+export const Popup: React.FC = () => {
   const [state, setState] = useState<PopupState>({
     gameState: null,
     choices: []
@@ -142,7 +142,11 @@ const Popup: React.FC = () => {
       ) : state.gameState.data.guesses.length === 0 ? (
         <div className="no-guesses">No guesses recorded yet</div>
       ) : (
-        <div className="guess-history">
+        <div 
+          className="guess-history"
+          role="list"
+          aria-label="guess history"
+        >
           {state.gameState.data.guesses.map((guess, index) => (
             <GuessItem 
               key={`${index}-${guess.cards.map(c => c.position).join('-')}`}
@@ -156,9 +160,14 @@ const Popup: React.FC = () => {
   );
 };
 
-const root = ReactDOM.createRoot(document.getElementById('root')!);
-root.render(
-  <React.StrictMode>
-    <Popup />
-  </React.StrictMode>
-); 
+// Only run this if we're in a browser environment
+if (typeof document !== 'undefined') {
+  const root = document.getElementById('root');
+  if (root) {
+    ReactDOM.createRoot(root).render(
+      <React.StrictMode>
+        <Popup />
+      </React.StrictMode>
+    );
+  }
+} 

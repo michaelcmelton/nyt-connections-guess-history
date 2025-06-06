@@ -29,7 +29,10 @@ const GuessItem: React.FC<GuessItemProps> = ({ guess, choices }) => {
   ).length === 3;
 
   return (
-    <div className={`guess-item ${guess.correct ? 'correct' : isOneAway ? 'one-away' : ''}`}>
+    <div 
+      className={`guess-item ${guess.correct ? 'correct' : isOneAway ? 'one-away' : ''}`}
+      role="listitem"
+    >
       <div className="guess-words">
         {guessWords.map((word, index) => (
           <span key={index} className="word">
