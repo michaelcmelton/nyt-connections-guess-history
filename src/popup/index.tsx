@@ -19,6 +19,7 @@ export const Popup: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [extensionVersion, setExtensionVersion] = useState<string>('');
   const [isDebugVisible, setIsDebugVisible] = useState(false);
+  const [isDevelopment, _] = useState<boolean>(process.env.NODE_ENV === "development");
 
   useEffect(() => {
     let mounted = true;
@@ -116,6 +117,7 @@ export const Popup: React.FC = () => {
           ))}
         </div>
       )}
+      {isDevelopment && (
       <div className="footer">
         <div className="debug-info">
           <h4 
@@ -140,9 +142,10 @@ export const Popup: React.FC = () => {
                 <li>Choices: {JSON.stringify(state.choices)}</li>
               </ul>
             </>
-          )}
-        </div>
+            )}
+          </div>
       </div>
+      )}
     </div>
   );
 };

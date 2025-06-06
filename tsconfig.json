@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "ESNext",
-    "types": ["jest", "jest-chrome", "@testing-library/jest-dom"],
+    "types": ["jest", "jest-chrome", "@testing-library/jest-dom", "@types/node"],
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
     "moduleResolution": "node",
     "strict": true,
