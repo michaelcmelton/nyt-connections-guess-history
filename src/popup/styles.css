@@ -110,3 +110,32 @@ h1 {
 .guess-history::-webkit-scrollbar-thumb:hover {
   background: #555;
 } 
+
+.footer {
+  margin-top: 16px;
+}
+
+.debug-info {
+  background: #f0f0f0;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.debug-info h4 {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.debug-info h5 {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.debug-info ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+.debug-info li {
+  margin-bottom: 4px;
+} 

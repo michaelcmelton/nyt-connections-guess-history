@@ -14,6 +14,7 @@ module.exports = {
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   testPathIgnorePatterns: ['/node_modules/', '/dist/'],
+  reporters: ['default'], 
   globals: {
     'ts-jest': {
       tsconfig: 'tsconfig.json',

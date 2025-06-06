@@ -1,14 +1,6 @@
 import { chrome } from 'jest-chrome';
 import { PuzzleState } from '../shared/types';
 
-// Mock window.location.href before importing content script
-Object.defineProperty(window, 'location', {
-  value: {
-    href: 'https://www.nytimes.com/games/connections'
-  },
-  writable: true
-});
-
 // Create mock game state
 const mockGameState: PuzzleState = {
   puzzleId: 'test-puzzle',
@@ -54,6 +46,15 @@ describe('Content Script', () => {
     // Reset document.querySelector mock
     (document.querySelector as jest.Mock).mockReturnValue({
       className: 'cardsContainer'
+    });
+
+    // Ensure window.location is set before any imports
+    Object.defineProperty(window, 'location', {
+      value: {
+        href: 'https://www.nytimes.com/games/connections'
+      },
+      writable: true,
+      configurable: true
     });
 
     // Reset jest modules to ensure clean content script import
@@ -114,6 +115,62 @@ describe('Content Script', () => {
       );
 
       expect(sendResponse).toHaveBeenCalledWith({ state: null });
+    });
+
+    it('sets up and triggers MutationObserver correctly', async () => {
+      // Set up initial state
+      localStorage.setItem(
+        'game-state-connections/0987654321',
+        JSON.stringify({ states: [mockGameState] })
+      );
+
+      // Import content script
+      await import('../content');
+      
+      // Wait for ready notification
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Clear previous messages
+      chrome.runtime.sendMessage.mockClear();
+      
+      // Get observer and trigger
+      const observer = (MutationObserver as jest.Mock).mock.results[0].value;
+      
+      // Create mock mutation records
+      const mockMutationRecords = [{
+        type: 'childList',
+        target: document.querySelector('[class*="cardsContainer"]'),
+        addedNodes: [document.createElement('div')],
+        removedNodes: [],
+        previousSibling: null,
+        nextSibling: null,
+        attributeName: null,
+        attributeNamespace: null,
+        oldValue: null
+      }];
+      
+      // Trigger the mutation callback
+      observer.trigger(mockMutationRecords);
+      
+      // Wait for async operations
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+        type: 'GAME_STATE_UPDATED',
+        payload: { state: mockGameState }
+      });
+    });
+
+    it('throws error when not on NYT Connections page', async () => {
+      // Mock window.location
+      Object.defineProperty(window, 'location', {
+        value: {
+          href: 'https://www.nytimes.com/different-page'
+        },
+        writable: true
+      });
+      
+      await expect(import('../content')).rejects.toThrow('Not on Connections page');
     });
   });
 
@@ -195,6 +252,28 @@ describe('Content Script', () => {
         type: 'CONTENT_SCRIPT_READY',
         url: window.location.href
       });
+    });
+
+    it('handles REQUEST_CHOICES messages', async () => {
+      await import('../content');
+      const sendResponse = jest.fn();
+      
+      chrome.runtime.onMessage.callListeners(
+        { type: 'REQUEST_CHOICES' },
+        { id: 'test-sender' },
+        sendResponse
+      );
+      
+      expect(sendResponse).toHaveBeenCalledWith({ choices: expect.any(Array) });
+    });
+
+    it('removes existing listeners before adding new ones', async () => {
+      const removeListenerSpy = jest.spyOn(chrome.runtime.onMessage, 'removeListener');
+      
+      await import('../content');
+      await import('../content'); // Import twice to trigger listener cleanup
+      
+      expect(removeListenerSpy).toHaveBeenCalled();
     });
   });
 }); 

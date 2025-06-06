@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { PuzzleState } from '../shared/types';
 import GuessItem from './components/GuessItem';
 import './styles.css';
+import { MessageResponse, MessageType } from '@/shared/messages';
 
 interface PopupState {
   gameState: PuzzleState | null;
@@ -17,109 +18,68 @@ export const Popup: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [extensionVersion, setExtensionVersion] = useState<string>('');
-
-  // Debug logging for state changes
-  useEffect(() => {
-    console.log('[DEBUG] Popup state updated:', {
-      hasGameState: !!state.gameState,
-      guessCount: state.gameState?.data?.guesses?.length || 0,
-      choicesCount: state.choices.length,
-      loading,
-      error
-    });
-  }, [state, loading, error]);
+  const [isDebugVisible, setIsDebugVisible] = useState(false);
 
   useEffect(() => {
     let mounted = true;
-    console.log('[DEBUG] Popup component mounted');
 
+    chrome.tabs.query({ active: true }, (tabs) => {
+      if (!tabs[0].url?.includes('nytimes.com/games/connections')) {
+        setError('Please open the NYT Connections game to use this extension. If you are already on the game, refresh the page.');
+        setLoading(false);
+        return;
+      }
+    });
+    
     // Get extension version
     const manifest = chrome.runtime.getManifest();
     setExtensionVersion(manifest.version);
-    console.log('[DEBUG] Extension version:', manifest.version);
 
-    const init = async () => {
-      try {
-        console.log('[DEBUG] Initializing popup - requesting choices');
-        // First get the choices - we only need these once
-        const choicesResponse = await chrome.runtime.sendMessage({ type: 'REQUEST_CHOICES' });
-        if (!mounted) {
-          console.log('[DEBUG] Component unmounted during choices request');
-          return;
-        }
-
-        if (chrome.runtime.lastError) {
-          console.error('[DEBUG] Error fetching choices:', chrome.runtime.lastError);
-          setError('Failed to load choices');
+    function initialize() {
+      // First get the choices - we only need these once
+      console.debug('[DEBUG -- popup] sent request for choices');
+      chrome.runtime.sendMessage({ type: MessageType.UPDATE_CHOICES }).then((response: MessageResponse) => {
+        console.debug('[DEBUG -- popup] received choices response: ', JSON.stringify(response));
+        if (response.type === MessageType.CHOICES_UPDATED) {
+          setState(prev => ({ ...prev, choices: response.choices || [] })); 
+        } else {
+          setError(`Failed to load choices: ${response.error}`);
           setLoading(false);
           return;
         }
-        
-        console.log('[DEBUG] Received choices response:', {
-          hasChoices: !!choicesResponse?.choices,
-          choicesCount: choicesResponse?.choices?.length || 0
-        });
-        
-        if (choicesResponse?.choices) {
-          setState(prev => ({ ...prev, choices: choicesResponse.choices }));
-        }
-
-        console.log('[DEBUG] Requesting game state');
-        // Then get the game state
-        const gameStateResponse = await chrome.runtime.sendMessage({ type: 'REQUEST_CURRENT_GAME_STATE' });
-        if (!mounted) {
-          console.log('[DEBUG] Component unmounted during game state request');
-          return;
-        }
-
-        if (chrome.runtime.lastError) {
-          console.error('[DEBUG] Error fetching game state:', chrome.runtime.lastError);
-          setError('Failed to load game state');
-          setLoading(false);
-          return;
-        }
-
-        console.log('[DEBUG] Received game state response:', {
-          hasState: !!gameStateResponse?.state,
-          guessCount: gameStateResponse?.state?.data?.guesses?.length || 0
-        });
-
-        if (gameStateResponse?.state) {
-          setState(prev => ({ ...prev, gameState: gameStateResponse.state }));
-        }
-      } catch (error) {
-        if (!mounted) return;
-        console.error('[DEBUG] Error initializing popup:', error);
-        setError('Failed to initialize');
-      } finally {
-        if (mounted) {
-          console.log('[DEBUG] Initialization complete, setting loading to false');
-          setLoading(false);
-        }
+      });
+      
+      if (chrome.runtime.lastError) {
+        setError(`Failed to load choices: ${chrome.runtime.lastError}`);
+        setLoading(false);
+        return;
       }
-    };
+        
+      console.debug('[DEBUG -- popup] sent request for game state');
+      // Then get the game state
+      chrome.runtime.sendMessage({ type: MessageType.UPDATE_GAME_STATE }).then((response: MessageResponse) => {
+        console.debug('[DEBUG -- popup] received game state response: ', JSON.stringify(response));
+        if (response.type === MessageType.GAME_STATE_UPDATED) {
+          setState(prev => ({ ...prev, gameState: response.state || null }));
+        } else {
+          setError(`Failed to load game state: ${response.error}`);
+          setLoading(false);
+          return;
+        }
+      });
 
-    init();
-
-    // Listen for updates from background script - only for game state updates
-    const listener = (message: { type: string; payload: { state: PuzzleState } }) => {
-      if (message.type === 'GAME_STATE_UPDATED' && mounted) {
-        console.log('[DEBUG] Received state update from background:', {
-          guessCount: message.payload.state.data.guesses.length,
-          isComplete: message.payload.state.data.puzzleComplete,
-          isWon: message.payload.state.data.puzzleWon
-        });
-        setState(prev => ({ ...prev, gameState: message.payload.state }));
+      if (chrome.runtime.lastError) {
+        setError(`Failed to load game state: ${chrome.runtime.lastError}`);
+        setLoading(false);
+        return;
       }
-    };
+    }
 
-    console.log('[DEBUG] Setting up message listener');
-    chrome.runtime.onMessage.addListener(listener);
-    
+    initialize();
+    setLoading(false);
+
     return () => {
-      console.log('[DEBUG] Popup component unmounting');
       mounted = false;
-      chrome.runtime.onMessage.removeListener(listener);
     };
   }, []);
 
@@ -133,8 +93,8 @@ export const Popup: React.FC = () => {
         <div className="loading">Loading...</div>
       ) : error ? (
         <div className="error">{error}</div>
-      ) : !state.gameState ? (
-        <div className="no-guesses">No active game found</div>
+      ) : !state.gameState || state.gameState.printDate !== new Date().toISOString().split('T')[0] ? (
+        <div className="no-guesses">No active game found. Please start a new game.</div>
       ) : state.gameState.data.puzzleComplete && !state.gameState.data.puzzleWon ? (
         <div className="no-guesses">Sorry for the loss! Come back tomorrow to play again!</div>
       ) : state.gameState.data.puzzleComplete && state.gameState.data.puzzleWon ? (
@@ -156,6 +116,33 @@ export const Popup: React.FC = () => {
           ))}
         </div>
       )}
+      <div className="footer">
+        <div className="debug-info">
+          <h4 
+            onClick={() => setIsDebugVisible(!isDebugVisible)} 
+            style={{ cursor: 'pointer', userSelect: 'none' }}
+          >
+            Debug Info {isDebugVisible ? '▼' : '▶'}
+          </h4>
+          {isDebugVisible && (
+            <>
+              <h5>Game State</h5>
+              <ul>
+                <li>Game Schema Version: {state.gameState?.schemaVersion}</li>
+                <li>Game State: {JSON.stringify(state.gameState)}</li>
+                <li>Number of Guesses Made: {state.gameState?.data.guesses.length || 0}</li>
+                <li>Puzzle Complete: {state.gameState?.data.puzzleComplete ? 'Yes' : 'No'}</li>
+                <li>Puzzle Won: {state.gameState?.data.puzzleWon ? 'Yes' : 'No'}</li>
+              </ul>
+              <h5>Choices</h5>
+              <ul>
+                <li>Number of Choices: {state.choices.length || 0}</li>
+                <li>Choices: {JSON.stringify(state.choices)}</li>
+              </ul>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

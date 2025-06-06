@@ -20,13 +20,16 @@ Object.defineProperty(window, 'location', {
 });
 
 // Mock MutationObserver
-global.MutationObserver = class {
-  constructor(callback) {
-    this.callback = callback;
-  }
-  disconnect() {}
-  observe(element, initObject) {}
+const mockObserverInstance = {
+  observe: jest.fn(),
+  disconnect: jest.fn(),
+  takeRecords: jest.fn()
 };
+
+global.MutationObserver = jest.fn((callback) => {
+  mockObserverInstance.trigger = (mutations) => callback(mutations, mockObserverInstance);
+  return mockObserverInstance;
+});
 
 // Increase default timeout for all tests
 jest.setTimeout(30000);
