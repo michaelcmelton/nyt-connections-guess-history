@@ -19,11 +19,8 @@ export const Popup: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [extensionVersion, setExtensionVersion] = useState<string>('');
   const [isDebugVisible, setIsDebugVisible] = useState(false);
-  const [isDevelopment, _] = useState<boolean>(process.env.NODE_ENV === "development");
 
   useEffect(() => {
-    let mounted = true;
-
     chrome.tabs.query({ active: true }, (tabs) => {
       if (!tabs[0].url?.includes('nytimes.com/games/connections')) {
         setError('Please open the NYT Connections game to use this extension. If you are already on the game, refresh the page.');
@@ -38,24 +35,25 @@ export const Popup: React.FC = () => {
 
     function initialize() {
       // First get the choices - we only need these once
-      console.debug('[DEBUG -- popup] sent request for choices');
-      chrome.runtime.sendMessage({ type: MessageType.UPDATE_CHOICES }).then((response: MessageResponse) => {
-        console.debug('[DEBUG -- popup] received choices response: ', JSON.stringify(response));
-        if (response.type === MessageType.CHOICES_UPDATED) {
-          setState(prev => ({ ...prev, choices: response.choices || [] })); 
-        } else {
-          setError(`Failed to load choices: ${response.error}`);
+      if (state.choices.length === 0) {
+        console.debug('[DEBUG -- popup] sent request for choices');
+        chrome.runtime.sendMessage({ type: MessageType.UPDATE_CHOICES }).then((response: MessageResponse) => {
+          console.debug('[DEBUG -- popup] received choices response: ', JSON.stringify(response));
+          if (response.type === MessageType.CHOICES_UPDATED) {
+            setState(prev => ({ ...prev, choices: response.choices || [] })); 
+          } else {
+            setError(`Failed to load choices: ${response.error}`);
+            setLoading(false);
+            return;
+          }
+        });
+        
+        if (chrome.runtime.lastError) {
+          setError(`Failed to load choices: ${chrome.runtime.lastError}`);
           setLoading(false);
           return;
-        }
-      });
-      
-      if (chrome.runtime.lastError) {
-        setError(`Failed to load choices: ${chrome.runtime.lastError}`);
-        setLoading(false);
-        return;
+        }   
       }
-        
       console.debug('[DEBUG -- popup] sent request for game state');
       // Then get the game state
       chrome.runtime.sendMessage({ type: MessageType.UPDATE_GAME_STATE }).then((response: MessageResponse) => {
@@ -78,10 +76,6 @@ export const Popup: React.FC = () => {
 
     initialize();
     setLoading(false);
-
-    return () => {
-      mounted = false;
-    };
   }, []);
 
   return (

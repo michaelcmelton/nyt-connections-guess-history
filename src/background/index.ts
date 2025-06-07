@@ -18,11 +18,16 @@ function resetChoices() {
 }
 
 function updateChoices(choices: string[]) {
-  console.debug(`[DEBUG -- background] updating original choices (${JSON.stringify(initialChoices)}) with: ${JSON.stringify(choices)}`);
+  console.debug(`[DEBUG -- background] updating choices - current cache: ${JSON.stringify(initialChoices)}`);
+  console.debug(`[DEBUG -- background] updating choices - new choices: ${JSON.stringify(choices)}`);
   initialChoices = choices;
+  console.debug(`[DEBUG -- background] choices updated - new cache: ${JSON.stringify(initialChoices)}`);
 }
 
 async function getChoices() {
+  console.debug(`[DEBUG -- background] getChoices called - current cache: ${JSON.stringify(initialChoices)}`);
+  console.debug(`[DEBUG -- background] cache length: ${initialChoices.length}`);
+  
   if (initialChoices.length > 0) {
     console.debug('[DEBUG -- background] returning cached choices: ', JSON.stringify(initialChoices));
     return initialChoices;
