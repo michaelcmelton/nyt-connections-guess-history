@@ -94,7 +94,7 @@ export const Popup: React.FC = () => {
         <div className="loading">Loading...</div>
       ) : error ? (
         <div className="error">{error}</div>
-      ) : !state.gameState || state.gameState.printDate !== new Date().toISOString().split('T')[0] ? (
+      ) : !state.gameState ? (
         <div className="no-guesses">No active game found. Please start a new game.</div>
       ) : state.gameState.data.puzzleComplete && !state.gameState.data.puzzleWon ? (
         <div className="no-guesses">Sorry for the loss! Come back tomorrow to play again!</div>
@@ -117,7 +117,6 @@ export const Popup: React.FC = () => {
           ))}
         </div>
       )}
-      {isDevelopment && (
       <div className="footer">
         <div className="debug-info">
           <h4 
@@ -145,7 +144,6 @@ export const Popup: React.FC = () => {
             )}
           </div>
       </div>
-      )}
     </div>
   );
 };
