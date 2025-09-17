@@ -12,7 +12,12 @@
     "test:watch": "vitest --watch",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test --config playwright-extension.config.ts",
+    "test:e2e:ui": "playwright test --ui --config playwright-extension.config.ts",
+    "test:e2e:headed": "playwright test --headed --config playwright-extension.config.ts",
+    "test:e2e:debug": "playwright test --debug --config playwright-extension.config.ts",
+    "test:e2e:install": "playwright install"
   },
   "keywords": [],
   "author": "",
@@ -23,6 +28,7 @@
     "vite": "^7.1.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.45.0",
     "@testing-library/jest-dom": "^6.4.2",
     "@testing-library/svelte": "^4.0.3",
     "@testing-library/user-event": "^14.5.2",
