@@ -1,0 +1,28 @@
+{
+    "manifest_version": 3,
+    "name": "Connections Guess History",
+    "version": "1.0.0",
+    "description": "This Chrome Extension keeps a record of the user's guess history in the NYT's daily game Connections.",
+    "action": {
+        "default_popup": "index.html"
+    },
+    "permissions": [
+        "storage",
+        "activeTab"
+    ],
+    "background": {
+        "service_worker": "background.js"
+    },
+    "content_scripts": [
+        {
+            "matches": ["https://www.nytimes.com/games/connections/*"],
+            "js": ["content.js"]
+        }
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": ["index.html"],
+            "matches": ["<all_urls>"]
+        }
+    ]
+}
